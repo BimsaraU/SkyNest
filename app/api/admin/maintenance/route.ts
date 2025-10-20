@@ -77,3 +77,97 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// POST - Create a new maintenance request (Admin/Manager)
+export async function POST(request: NextRequest) {
+  try {
+    const admin = await verifyAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { room_id, issue_description, priority = 'Normal' } = body;
+
+    // Validate required fields
+    if (!room_id || !issue_description?.trim()) {
+      return NextResponse.json(
+        { error: 'Missing required fields: room_id and issue_description' },
+        { status: 400 }
+      );
+    }
+
+    // Validate priority
+    const validPriorities = ['Low', 'Normal', 'High', 'Urgent'];
+    if (!validPriorities.includes(priority)) {
+      return NextResponse.json(
+        { error: 'Invalid priority level' },
+        { status: 400 }
+      );
+    }
+
+    // Verify room exists
+    const roomCheck = await pool.query(
+      'SELECT id, room_number, branch_id FROM rooms WHERE id = $1',
+      [room_id]
+    );
+
+    if (roomCheck.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Room not found' },
+        { status: 404 }
+      );
+    }
+
+    // Create maintenance request
+    // Note: reported_by_staff_id is NULL since admin created it directly
+    // You could track admin ID separately if needed
+    const insertQuery = `
+      INSERT INTO maintenance_logs (
+        room_id,
+        issue_description,
+        priority,
+        status,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, $3, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING 
+        id,
+        log_reference,
+        room_id,
+        issue_description,
+        priority,
+        status,
+        created_at
+    `;
+
+    const result = await pool.query(insertQuery, [
+      room_id,
+      issue_description.trim(),
+      priority
+    ]);
+
+    const newRequest = result.rows[0];
+
+    console.log('[ADMIN MAINTENANCE] Created new request:', {
+      id: newRequest.id,
+      reference: newRequest.log_reference,
+      room_id: newRequest.room_id,
+      priority: newRequest.priority,
+      created_by: `Admin ${admin.admin_id}`
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Maintenance request created successfully',
+      request: newRequest
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error('[ADMIN MAINTENANCE POST] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to create maintenance request', details: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}

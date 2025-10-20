@@ -20,7 +20,8 @@ import {
   MapPin,
   X,
   UserCheck,
-  Hourglass
+  Hourglass,
+  Plus
 } from 'lucide-react'
 
 interface Alert {
@@ -66,16 +67,27 @@ export default function AdminAlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [branches, setBranches] = useState<any[]>([])
   const [staffMembers, setStaffMembers] = useState<any[]>([])
+  const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'urgent' | 'pending' | 'in-progress' | 'completed'>('pending') // Changed to pending by default
   const [selectedBranch, setSelectedBranch] = useState('all')
   const [actionRequiredCount, setActionRequiredCount] = useState(0)
   const [urgentCount, setUrgentCount] = useState(0)
   const [updatingAssignment, setUpdatingAssignment] = useState<string | null>(null)
+  
+  // New Maintenance Request Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [creatingRequest, setCreatingRequest] = useState(false)
+  const [newRequest, setNewRequest] = useState({
+    room_id: '',
+    issue_description: '',
+    priority: 'Normal' as 'Low' | 'Normal' | 'High' | 'Urgent'
+  })
 
   useEffect(() => {
     fetchBranches()
     fetchStaff()
+    fetchRooms()
   }, [])
 
   useEffect(() => {
@@ -103,6 +115,19 @@ export default function AdminAlertsPage() {
       }
     } catch (error) {
       console.error('Error fetching staff:', error)
+    }
+  }
+
+  const fetchRooms = async () => {
+    try {
+      // Use admin-specific rooms API that returns room_number, room_type, status, branch_name
+      const response = await fetch('/api/admin/rooms')
+      if (response.ok) {
+        const data = await response.json()
+        setRooms(data.rooms || [])
+      }
+    } catch (error) {
+      console.error('Error fetching rooms:', error)
     }
   }
 
@@ -162,6 +187,55 @@ export default function AdminAlertsPage() {
       alert('Failed to assign staff member')
     } finally {
       setUpdatingAssignment(null)
+    }
+  }
+
+  const handleCreateRequest = async () => {
+    if (!newRequest.room_id || !newRequest.issue_description.trim()) {
+      alert('Please select a room and describe the issue')
+      return
+    }
+
+    try {
+      setCreatingRequest(true)
+      
+      const response = await fetch('/api/admin/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Ensure room_id is numeric for the API
+        body: JSON.stringify({
+          ...newRequest,
+          room_id: parseInt(newRequest.room_id as any, 10)
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        alert('Maintenance request created successfully!')
+        console.log('[CREATE REQUEST] Success:', data)
+        setShowCreateModal(false)
+        setNewRequest({
+          room_id: '',
+          issue_description: '',
+          priority: 'Normal'
+        })
+        await fetchAlerts()
+      } else {
+        let errorMessage = 'Unknown error'
+        try {
+          const error = await response.json()
+          errorMessage = error.error || error.details || 'Failed to create request'
+        } catch (e) {
+          errorMessage = `Server returned status ${response.status}`
+        }
+        alert(`Failed to create request: ${errorMessage}`)
+        console.error('[CREATE REQUEST] Failed:', { status: response.status, error: errorMessage })
+      }
+    } catch (error) {
+      console.error('[CREATE REQUEST] Error:', error)
+      alert(`Failed to create maintenance request: ${(error as Error).message}`)
+    } finally {
+      setCreatingRequest(false)
     }
   }
 
@@ -285,6 +359,14 @@ export default function AdminAlertsPage() {
               </div>
             </div>
             <div className="flex gap-3">
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                variant="default"
+                className="flex items-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                New Maintenance Request
+              </Button>
               {actionRequiredCount > 0 && (
                 <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
@@ -542,6 +624,137 @@ export default function AdminAlertsPage() {
               </Card>
             )}
           </>
+        )}
+
+        {/* Create New Maintenance Request Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <Card className="max-w-2xl w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/20 rounded-lg border border-amber-500/30">
+                    <Wrench className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Create Maintenance Request</h2>
+                </div>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Room Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">
+                    Select Room <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={newRequest.room_id}
+                    onChange={(e) => setNewRequest({ ...newRequest, room_id: e.target.value })}
+                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  >
+                    <option value="">Choose a room...</option>
+                    {(() => {
+                      // Group rooms by branch
+                      const roomsByBranch = rooms.reduce((acc: any, room: any) => {
+                        const branchName = room.branch_name || 'Unknown Branch';
+                        if (!acc[branchName]) {
+                          acc[branchName] = [];
+                        }
+                        acc[branchName].push(room);
+                        return acc;
+                      }, {});
+
+                      return Object.keys(roomsByBranch).sort().map(branchName => (
+                        <optgroup key={branchName} label={branchName}>
+                          {roomsByBranch[branchName]
+                            .sort((a: any, b: any) => String(a.room_number).localeCompare(String(b.room_number)))
+                            .map((room: any) => (
+                              <option key={room.id} value={room.id}>
+                                Room {room.room_number} - {room.room_type} ({room.status})
+                              </option>
+                            ))}
+                        </optgroup>
+                      ));
+                    })()}
+                  </select>
+                </div>
+
+                {/* Priority Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">
+                    Priority Level
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(['Low', 'Normal', 'High', 'Urgent'] as const).map((priority) => (
+                      <button
+                        key={priority}
+                        onClick={() => setNewRequest({ ...newRequest, priority })}
+                        className={`p-3 rounded-lg border font-semibold transition-all ${
+                          newRequest.priority === priority
+                            ? priority === 'Urgent'
+                              ? 'bg-red-500/20 border-red-500 text-red-400'
+                              : priority === 'High'
+                              ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                              : priority === 'Normal'
+                              ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                              : 'bg-gray-500/20 border-gray-500 text-gray-400'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                        }`}
+                      >
+                        {priority}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Issue Description */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-2">
+                    Issue Description <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    value={newRequest.issue_description}
+                    onChange={(e) => setNewRequest({ ...newRequest, issue_description: e.target.value })}
+                    placeholder="Describe the maintenance issue in detail..."
+                    rows={4}
+                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    onClick={handleCreateRequest}
+                    disabled={creatingRequest}
+                    className="flex-1 flex items-center justify-center gap-2"
+                  >
+                    {creatingRequest ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="w-5 h-5" />
+                        Create Request
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => setShowCreateModal(false)}
+                    variant="secondary"
+                    disabled={creatingRequest}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
         )}
       </main>
     </div>
