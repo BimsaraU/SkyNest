@@ -45,6 +45,13 @@ COPY --from=builder /app/public ./public
 # Ensure the server can read env files mounted at runtime if provided
 # (We generally rely on real envs; do not bake .env into image)
 
+# Create a writable Next.js cache directory for image optimization
+RUN mkdir -p /app/.next/cache && \
+	chown -R nextjs:nodejs /app/.next
+
+# Optionally, direct Next cache to /app/.next/cache (default). To use /tmp instead, uncomment:
+# ENV NEXT_CACHE_DIR=/tmp/next-cache
+
 # Use non-root user
 USER nextjs
 
