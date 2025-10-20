@@ -1,7 +1,7 @@
 // This file manages the PostgreSQL connection pool for the Next.js app.
 // It uses TypeScript for type safety.
 
-// Lazy, build-safe pg pool
+// Lazy, build-safe pg pool (no throw at import/build)
 import { Pool } from 'pg';
 
 let pool: Pool | null = null;
@@ -9,12 +9,13 @@ let pool: Pool | null = null;
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    // Throw only at runtime on first use, not during import/build.
-    throw new Error('DATABASE_URL is not set. Provide it via env when running the server/container.');
+    // Don’t fail at import/build; fail only when actually used at runtime
+    throw new Error('DATABASE_URL is not set. Provide it at runtime (env).');
   }
-
   const useSSL =
-    process.env.PGSSL?.toLowerCase() === 'true' || connectionString.includes('neon.tech');
+    (process.env.PGSSL || '').toLowerCase() === 'true' ||
+    connectionString.includes('neon.tech') ||
+    connectionString.includes('sslmode=require');
 
   return new Pool({
     connectionString,
@@ -25,12 +26,11 @@ function createPool(): Pool {
   });
 }
 
-function getPool(): Pool {
+function getPool() {
   if (!pool) pool = createPool();
   return pool;
 }
 
-// Default export: expose common methods lazily so imports don’t connect at build
 const lazyPool = {
   query: (...args: Parameters<Pool['query']>) => getPool().query(...args),
   connect: (...args: Parameters<Pool['connect']>) => (getPool() as any).connect(...args),
