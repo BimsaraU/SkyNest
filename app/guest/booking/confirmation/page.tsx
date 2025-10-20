@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GuestNavbar from '@/app/components/GuestNavbar'
 import { Card, CardContent } from '@/components/ui/card'
@@ -20,6 +20,14 @@ interface BookingDetails {
 }
 
 export default function BookingConfirmationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-t from-amber-100/50 to-amber-50" />}> 
+      <BookingConfirmationInner />
+    </Suspense>
+  )
+}
+
+function BookingConfirmationInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const bookingRef = searchParams.get('ref')

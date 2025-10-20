@@ -1,7 +1,7 @@
 // app/guest/services/request/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GuestNavbar from '@/app/components/GuestNavbar'
@@ -27,6 +27,14 @@ const myBookings = [
 ];
 
 export default function ServiceRequestPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-t from-amber-100/50 to-amber-50" />}> 
+      <ServiceRequestInner />
+    </Suspense>
+  )
+}
+
+function ServiceRequestInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const serviceId = searchParams.get('serviceId')
