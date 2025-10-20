@@ -44,14 +44,14 @@ export default function ExperienceTiles() {
       title: "Highland Retreat", 
       location: "Kandy",
       description: "Escape to a serene sanctuary in the mist-covered hills. A perfect blend of nature, culture, and tranquility with breathtaking views.", 
-      image: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto-format&fit=crop",
+  image: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto=format&fit=crop",
       lit: "bg-gradient-to-l from-yellow-800/35 via-yellow-800/15 to-yellow-800/33"
     },
     { 
       title: "Coastal Chronicle", 
       location: "Galle",
       description: "Step back in time within a historic fort. Experience colonial charm, stunning ocean vistas, and the relaxing rhythm of coastal life.", 
-      image: "https://images.unsplash.com/photo-1590523741831-ab7e8b8f9c7f?q=80&w=1974&auto-format&fit=crop",
+  image: "https://images.unsplash.com/photo-1590523741831-ab7e8b8f9c7f?q=80&w=1974&auto=format&fit=crop",
       lit: "bg-gradient-to-r from-yellow-800/33 to-transparent" 
     }
   ];

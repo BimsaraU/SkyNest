@@ -44,6 +44,7 @@ const NavBar = () => {
                 alt="Sky Nest Logo" 
                 fill
                 className="object-contain"
+                priority
               />
             </div>
           </Link>

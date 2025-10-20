@@ -17,12 +17,12 @@ import gsap from 'gsap'; // Import GSAP
 // --- Data for the Carousel (Backend Ready) ---
 const carouselItems = [
     {
-        image: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto-format&fit=crop',
+  image: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=2070&auto=format&fit=crop',
         title: 'Unparalleled Luxury',
         description: 'Discover world-class amenities and personalized service at every Sky Nest location.'
     },
     {
-        image: 'https://images.unsplash.com/photo-1590523741831-ab7e8b8f9c7f?q=80&w=1974&auto-format&fit=crop',
+  image: 'https://images.unsplash.com/photo-1590523741831-ab7e8b8f9c7f?q=80&w=1974&auto=format&fit=crop',
         title: 'Breathtaking Views',
         description: 'From serene coastlines to vibrant cityscapes, your perfect escape awaits.'
     },
