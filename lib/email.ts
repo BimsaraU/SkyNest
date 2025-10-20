@@ -2,9 +2,24 @@ import nodemailer from 'nodemailer';
 import path from 'path';
 
 // Read environment variables - Using same variables as emailService for consistency
-const SMTP_EMAIL = process.env.SMTP_EMAIL || process.env.SMTP_USER || 'your-email@example.com';
-const SMTP_PASSWORD = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || 'your-email-password';
+const SMTP_EMAIL = process.env.SMTP_EMAIL || process.env.SMTP_USER || '';
+const SMTP_PASSWORD = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || '';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+// Log configuration status (without exposing credentials)
+console.log('[EMAIL CONFIG]', {
+  hasEmail: !!SMTP_EMAIL,
+  emailPrefix: SMTP_EMAIL ? SMTP_EMAIL.substring(0, 3) + '***' : 'MISSING',
+  hasPassword: !!SMTP_PASSWORD,
+  passwordLength: SMTP_PASSWORD ? SMTP_PASSWORD.length : 0,
+  appUrl: APP_URL
+});
+
+// Validate credentials
+if (!SMTP_EMAIL || !SMTP_PASSWORD) {
+  console.error('❌ [EMAIL CONFIG] Missing SMTP credentials! Email sending will fail.');
+  console.error('   Required: SMTP_EMAIL and SMTP_PASSWORD environment variables');
+}
 
 // Nodemailer Transporter Setup with connection pooling and timeouts
 const transporter = nodemailer.createTransport({
@@ -68,6 +83,11 @@ function createPasswordResetEmailTemplate(name: string, resetLink: string): stri
 // Function to send the OTP email.
 export async function sendOtpEmail(email: string, otp: string) {
   try {
+    // Verify credentials before attempting to send
+    if (!SMTP_EMAIL || !SMTP_PASSWORD) {
+      throw new Error('SMTP credentials not configured. Please set SMTP_EMAIL and SMTP_PASSWORD environment variables.');
+    }
+
     const mailOptions = {
       from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
       to: email,
@@ -79,10 +99,24 @@ export async function sendOtpEmail(email: string, otp: string) {
         cid: 'skynestlogo'
       }]
     };
+    
+    console.log(`[EMAIL] Attempting to send OTP to ${email}...`);
     await transporter.sendMail(mailOptions);
     console.log(`✓ OTP email sent successfully to ${email}`);
   } catch (error) {
     console.error('❌ Error sending OTP email:', error);
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('ETIMEDOUT') || error.message.includes('Connection timeout')) {
+        throw new Error('Email server connection timeout. Please check your internet connection and SMTP credentials.');
+      } else if (error.message.includes('EAUTH')) {
+        throw new Error('Email authentication failed. Please verify your Gmail App Password is correct.');
+      } else if (error.message.includes('SMTP credentials not configured')) {
+        throw error;
+      }
+    }
+    
     throw new Error('Failed to send OTP email. Please try again.');
   }
 }
@@ -90,6 +124,11 @@ export async function sendOtpEmail(email: string, otp: string) {
 // Function to send the Password Reset email.
 export async function sendPasswordResetEmail(name: string, email: string, resetLink: string) {
   try {
+    // Verify credentials before attempting to send
+    if (!SMTP_EMAIL || !SMTP_PASSWORD) {
+      throw new Error('SMTP credentials not configured. Please set SMTP_EMAIL and SMTP_PASSWORD environment variables.');
+    }
+
     const mailOptions = {
       from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
       to: email,
@@ -101,10 +140,24 @@ export async function sendPasswordResetEmail(name: string, email: string, resetL
         cid: 'skynestlogo'
       }]
     };
+    
+    console.log(`[EMAIL] Attempting to send password reset to ${email}...`);
     await transporter.sendMail(mailOptions);
     console.log(`✓ Password reset email sent successfully to ${email}`);
   } catch (error) {
     console.error('❌ Error sending password reset email:', error);
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('ETIMEDOUT') || error.message.includes('Connection timeout')) {
+        throw new Error('Email server connection timeout. Please check your internet connection and SMTP credentials.');
+      } else if (error.message.includes('EAUTH')) {
+        throw new Error('Email authentication failed. Please verify your Gmail App Password is correct.');
+      } else if (error.message.includes('SMTP credentials not configured')) {
+        throw error;
+      }
+    }
+    
     throw new Error('Failed to send password reset email. Please try again.');
   }
 }
@@ -122,6 +175,11 @@ export async function sendEmail(
   }>
 ) {
   try {
+    // Verify credentials before attempting to send
+    if (!SMTP_EMAIL || !SMTP_PASSWORD) {
+      throw new Error('SMTP credentials not configured. Please set SMTP_EMAIL and SMTP_PASSWORD environment variables.');
+    }
+
     const mailOptions: any = {
       from: `"Sky Nest Hotel" <${SMTP_EMAIL}>`,
       to: to,
@@ -133,10 +191,23 @@ export async function sendEmail(
       mailOptions.attachments = attachments;
     }
     
+    console.log(`[EMAIL] Attempting to send "${subject}" to ${to}...`);
     await transporter.sendMail(mailOptions);
     console.log(`✓ Email sent successfully to ${to}`);
   } catch (error) {
     console.error('❌ Error sending email:', error);
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes('ETIMEDOUT') || error.message.includes('Connection timeout')) {
+        throw new Error('Email server connection timeout. Please check your internet connection and SMTP credentials.');
+      } else if (error.message.includes('EAUTH')) {
+        throw new Error('Email authentication failed. Please verify your Gmail App Password is correct.');
+      } else if (error.message.includes('SMTP credentials not configured')) {
+        throw error;
+      }
+    }
+    
     throw new Error('Failed to send email. Please try again.');
   }
 }
