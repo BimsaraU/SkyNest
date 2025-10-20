@@ -2,6 +2,9 @@ import { NextResponse, NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { verifyAdmin } from '@/lib/adminAuth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const admin = await verifyAdmin(request);
