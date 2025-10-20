@@ -1,6 +1,4 @@
 # syntax=docker/dockerfile:1.7
-
-# -------- Base builder image --------
 FROM node:22-alpine AS deps
 WORKDIR /app
 
@@ -24,6 +22,7 @@ COPY . .
 
 # Build with standalone output for smaller runtime image
 # Turbopack is enabled by default in package.json scripts
+# NOTE: No DATABASE_URL needed at build—lib/db.ts is lazy and admin reports are dynamic
 RUN npm run build
 
 # -------- Runtime: minimal runner --------

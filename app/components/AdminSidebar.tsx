@@ -73,7 +73,7 @@ export default function AdminSidebar({ isCollapsed, setIsCollapsed }: AdminSideb
           suppressHydrationWarning
         >
            <Image 
-             src="/skyad.png"
+             src="/Skyad.png"
              priority 
              alt="Sky Nest Admin" 
              width={180} 
