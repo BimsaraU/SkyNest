@@ -6,13 +6,21 @@ const SMTP_EMAIL = process.env.SMTP_EMAIL || process.env.SMTP_USER || 'your-emai
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || 'your-email-password';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-// Nodemailer Transporter Setup
+// Nodemailer Transporter Setup with connection pooling and timeouts
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: SMTP_EMAIL,
     pass: SMTP_PASSWORD,
   },
+  pool: true, // Use pooled connections
+  maxConnections: 5, // Max simultaneous connections
+  maxMessages: 100, // Max messages per connection
+  rateDelta: 1000, // Time window for rate limiting (1 second)
+  rateLimit: 5, // Max messages per rateDelta
+  connectionTimeout: 10000, // 10 seconds connection timeout
+  greetingTimeout: 10000, // 10 seconds greeting timeout
+  socketTimeout: 10000, // 10 seconds socket timeout
 });
 
 // --- TEMPLATES ---
@@ -59,34 +67,46 @@ function createPasswordResetEmailTemplate(name: string, resetLink: string): stri
 
 // Function to send the OTP email.
 export async function sendOtpEmail(email: string, otp: string) {
-  const mailOptions = {
-    from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
-    to: email,
-    subject: 'Your Sky Nest Admin Verification Code',
-    html: createOtpEmailTemplate(otp),
-    attachments: [{
-      filename: 'SNC.png',
-      path: path.join(process.cwd(), 'public', 'SNC.png'),
-      cid: 'skynestlogo'
-    }]
-  };
-  await transporter.sendMail(mailOptions);
+  try {
+    const mailOptions = {
+      from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
+      to: email,
+      subject: 'Your Sky Nest Admin Verification Code',
+      html: createOtpEmailTemplate(otp),
+      attachments: [{
+        filename: 'SNC.png',
+        path: path.join(process.cwd(), 'public', 'SNC.png'),
+        cid: 'skynestlogo'
+      }]
+    };
+    await transporter.sendMail(mailOptions);
+    console.log(`✓ OTP email sent successfully to ${email}`);
+  } catch (error) {
+    console.error('❌ Error sending OTP email:', error);
+    throw new Error('Failed to send OTP email. Please try again.');
+  }
 }
 
 // Function to send the Password Reset email.
 export async function sendPasswordResetEmail(name: string, email: string, resetLink: string) {
-  const mailOptions = {
-    from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
-    to: email,
-    subject: 'Your Sky Nest Password Reset Link',
-    html: createPasswordResetEmailTemplate(name, resetLink),
-    attachments: [{
-      filename: 'SNC.png',
-      path: path.join(process.cwd(), 'public', 'SNC.png'),
-      cid: 'skynestlogo'
-    }]
-  };
-  await transporter.sendMail(mailOptions);
+  try {
+    const mailOptions = {
+      from: `"Sky Nest Security" <${SMTP_EMAIL}>`,
+      to: email,
+      subject: 'Your Sky Nest Password Reset Link',
+      html: createPasswordResetEmailTemplate(name, resetLink),
+      attachments: [{
+        filename: 'SNC.png',
+        path: path.join(process.cwd(), 'public', 'SNC.png'),
+        cid: 'skynestlogo'
+      }]
+    };
+    await transporter.sendMail(mailOptions);
+    console.log(`✓ Password reset email sent successfully to ${email}`);
+  } catch (error) {
+    console.error('❌ Error sending password reset email:', error);
+    throw new Error('Failed to send password reset email. Please try again.');
+  }
 }
 
 // Generic function to send any email
@@ -101,16 +121,22 @@ export async function sendEmail(
     contentType: string;
   }>
 ) {
-  const mailOptions: any = {
-    from: `"Sky Nest Hotel" <${SMTP_EMAIL}>`,
-    to: to,
-    subject: subject,
-    html: html,
-  };
-  
-  if (attachments && attachments.length > 0) {
-    mailOptions.attachments = attachments;
+  try {
+    const mailOptions: any = {
+      from: `"Sky Nest Hotel" <${SMTP_EMAIL}>`,
+      to: to,
+      subject: subject,
+      html: html,
+    };
+    
+    if (attachments && attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`✓ Email sent successfully to ${to}`);
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+    throw new Error('Failed to send email. Please try again.');
   }
-  
-  await transporter.sendMail(mailOptions);
 }
