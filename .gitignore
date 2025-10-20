@@ -1,0 +1,64 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# local env files
+.env*.local
+
+# Database - Ignore development files but keep main production schema
+/Database/Dev_Notes/
+/Database/V1_Single_Users_Table/
+/Database/V2_Separated_Tables/
+/Database/my-app/
+/Database/*mock*.sql
+/Database/*fix*.sql
+/Database/*migration*.sql
+/Database/neon*.sql
+/Database/*.md
+!/Database/Main_Database/
+/Database/V2_Separated_Tables
+
+# Uploaded profile pictures
+
+# AI-generated markdown files
+***.md
+    
+/app/temp

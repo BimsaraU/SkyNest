@@ -1,0 +1,173 @@
+// app/guest/my-bookings/page.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import GuestNavbar from '@/app/components/GuestNavbar'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Calendar, BedDouble, MapPin, Loader2 } from 'lucide-react'
+
+interface Booking {
+  id: number
+  booking_reference: string
+  room_number: string
+  room_type: string
+  check_in_date: string
+  check_out_date: string
+  number_of_guests: number
+  status: string
+  total_amount: number
+  branch_name: string
+  branch_location: string
+  payment_status: string
+  payment_method: string | null
+  image: string
+  category: 'upcoming' | 'active' | 'past' | 'cancelled'
+  can_modify: boolean
+  can_cancel: boolean
+}
+
+const getStatusColor = (category: string) => {
+    if (category === 'upcoming' || category === 'active') return 'bg-blue-100 text-blue-700';
+    if (category === 'past') return 'bg-gray-100 text-gray-700';
+    if (category === 'cancelled') return 'bg-red-100 text-red-700';
+    return 'bg-gray-100 text-gray-700';
+};
+
+export default function MyBookingsPage() {
+  const [filter, setFilter] = useState('Upcoming');
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchBookings()
+  }, [])
+
+  const fetchBookings = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/guest/bookings')
+      if (!response.ok) throw new Error('Failed to fetch bookings')
+      const data = await response.json()
+      setBookings(data.bookings)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredBookings = bookings.filter(b => {
+    if (filter === 'Upcoming') return b.category === 'upcoming' || b.category === 'active';
+    if (filter === 'Past') return b.category === 'past';
+    if (filter === 'Cancelled') return b.category === 'cancelled';
+    return true;
+  });
+
+  return (
+    <div className="min-h-screen bg-gradient-to-t from-amber-700/40 to-amber-50 text-gray-800">
+      <GuestNavbar />
+      <main className="max-w-5xl mx-auto px-6 py-10">
+        <header className="mb-8">
+          <h1 className="text-5xl font-bold text-gray-900 font-l">My Bookings</h1>
+          <p className="text-gray-600 mt-2">View and manage your upcoming, past, and cancelled reservations.</p>
+        </header>
+
+        {/* Filter Tabs */}
+        <div className="flex space-x-2 border-b border-gray-200 mb-8">
+          <button onClick={() => setFilter('Upcoming')} className={`px-4 py-2 font-semibold transition-colors ${filter === 'Upcoming' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-gray-500 hover:text-gray-800'}`}>Upcoming</button>
+          <button onClick={() => setFilter('Past')} className={`px-4 py-2 font-semibold transition-colors ${filter === 'Past' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-gray-500 hover:text-gray-800'}`}>Past</button>
+          <button onClick={() => setFilter('Cancelled')} className={`px-4 py-2 font-semibold transition-colors ${filter === 'Cancelled' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-gray-500 hover:text-gray-800'}`}>Cancelled</button>
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-10 h-10 text-amber-600 animate-spin" />
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            Error loading bookings: {error}
+          </div>
+        )}
+
+        {/* Bookings List */}
+        {!loading && !error && (
+        <div className="space-y-6">
+          {filteredBookings.length > 0 ? (
+            filteredBookings.map(booking => (
+              <Card key={booking.id} className="shadow-lg bg-white/60 backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden">
+                <div className="flex">
+                  <div className="w-1/3 hidden md:block">
+                    <div className="relative h-full">
+                      <Image src={booking.image} alt={booking.room_type} fill className="object-cover" />
+                    </div>
+                  </div>
+                  <div className="w-full md:w-2/3">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-xl font-bold text-gray-900">{booking.room_type} - Room {booking.room_number}</CardTitle>
+                          <CardDescription className="flex items-center text-sm mt-1">
+                            <MapPin size={12} className="mr-1.5"/> 
+                            {booking.branch_name}
+                          </CardDescription>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(booking.category)}`}>
+                          {booking.category.charAt(0).toUpperCase() + booking.category.slice(1)}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600 mr-2">Booking Ref:</span>
+                          <p className="font-medium text-gray-800">{booking.booking_reference}</p>
+                        </div>
+                        <div className="flex items-center">
+                          <Calendar size={16} className="mr-3 text-gray-500" />
+                          <p className="font-medium text-gray-800">
+                            {new Date(booking.check_in_date).toLocaleDateString()} – {new Date(booking.check_out_date).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600 mr-2">Guests:</span>
+                          <p className="font-medium text-gray-800">{booking.number_of_guests}</p>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600 mr-2">Total:</span>
+                          <p className="font-medium text-gray-800">${Number(booking.total_amount).toFixed(2)}</p>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600 mr-2">Payment:</span>
+                          <p className="font-medium text-gray-800">{booking.payment_status}</p>
+                        </div>
+                      </div>
+                      <div className="mt-6 flex space-x-3">
+                        <Button variant="outline">View Details</Button>
+                        {booking.can_modify && <Button>Modify Booking</Button>}
+                        {booking.can_cancel && <Button variant="destructive">Cancel</Button>}
+                      </div>
+                    </CardContent>
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-16">
+              <p className="text-gray-600">You have no {filter.toLowerCase()} bookings.</p>
+            </div>
+          )}
+        </div>
+        )}
+      </main>
+    </div>
+  )
+}
+

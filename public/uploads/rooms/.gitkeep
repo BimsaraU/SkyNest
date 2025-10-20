@@ -1,0 +1,8 @@
+# Room Images Upload Directory
+
+This directory stores uploaded room images.
+
+Files uploaded through the admin panel will be stored here with the format:
+`room-{timestamp}-{random}.{ext}`
+
+Example: `room-1729459200000-abc123.jpg`
