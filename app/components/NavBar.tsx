@@ -40,7 +40,7 @@ const NavBar = () => {
           <Link href="/">
             <div className="relative w-[110px] h-10">
               <Image 
-                src="/Sky Nest Color.png"
+                src="/SNC.png"
                 alt="Sky Nest Logo" 
                 fill
                 className="object-contain"
