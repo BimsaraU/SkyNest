@@ -21,21 +21,29 @@ if (!SMTP_EMAIL || !SMTP_PASSWORD) {
   console.error('   Required: SMTP_EMAIL and SMTP_PASSWORD environment variables');
 }
 
-// Nodemailer Transporter Setup with connection pooling and timeouts
+// Nodemailer Transporter Setup - Using explicit SMTP config instead of "service"
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // Use TLS
   auth: {
     user: SMTP_EMAIL,
     pass: SMTP_PASSWORD,
   },
-  pool: true, // Use pooled connections
-  maxConnections: 5, // Max simultaneous connections
-  maxMessages: 100, // Max messages per connection
-  rateDelta: 1000, // Time window for rate limiting (1 second)
-  rateLimit: 5, // Max messages per rateDelta
-  connectionTimeout: 10000, // 10 seconds connection timeout
-  greetingTimeout: 10000, // 10 seconds greeting timeout
-  socketTimeout: 10000, // 10 seconds socket timeout
+  tls: {
+    ciphers: 'SSLv3',
+    rejectUnauthorized: false
+  },
+  pool: true,
+  maxConnections: 3,
+  maxMessages: 50,
+  rateDelta: 1000,
+  rateLimit: 3,
+  connectionTimeout: 30000, // Increased to 30 seconds
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
+  logger: true, // Enable logging for debugging
+  debug: true // Enable debug output
 });
 
 // --- TEMPLATES ---
