@@ -4,7 +4,7 @@ import pool from '@/lib/db';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { SkyNestPDFGenerator } from '@/lib/pdfGenerator';
-import { sendPaymentReceipt } from '@/lib/emailService';
+import { sendEmail } from '@/lib/email';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key-change-in-production');
 
@@ -172,20 +172,31 @@ export async function POST(request: NextRequest) {
       payment_date: new Date()
     };
 
-    // Send email with PDF
-    await sendPaymentReceipt(
-      booking.guest_email,
-      {
-        guestName: booking.guest_name,
-        bookingReference: booking.booking_reference,
-        paymentReference: latestPayment.payment_reference,
-        amount: `LKR ${parseFloat(latestPayment.amount || '0').toLocaleString()}`,
-        paymentMethod: latestPayment.payment_method,
-        paymentDate: latestPayment.payment_date,
-        remainingBalance: `LKR ${balance.toLocaleString()}`
-      },
-      pdfBuffer
-    );
+    // Send email with PDF via simple mailer; soft-fail on errors
+    const html = `
+      <h2>Payment Receipt</h2>
+      <p>Hi ${booking.guest_name},</p>
+      <p>Attached is your invoice for booking <strong>${booking.booking_reference}</strong>.</p>
+      <ul>
+        <li>Payment Ref: ${latestPayment.payment_reference}</li>
+        <li>Amount: LKR ${parseFloat(latestPayment.amount || '0').toLocaleString()}</li>
+        <li>Method: ${latestPayment.payment_method}</li>
+        <li>Date: ${new Date(latestPayment.payment_date).toLocaleString()}</li>
+        <li>Remaining balance: LKR ${balance.toLocaleString()}</li>
+      </ul>
+    `;
+    try {
+      await sendEmail(booking.guest_email, 'Your Sky Nest invoice/receipt', html, [
+        {
+          filename: `${booking.booking_reference}.pdf`,
+          content: pdfBuffer.toString('base64'),
+          encoding: 'base64',
+          contentType: 'application/pdf'
+        }
+      ]);
+    } catch (e: any) {
+      console.warn('[EMAIL][Invoice] send failed (soft):', e?.message || e);
+    }
 
     return NextResponse.json({
       success: true,

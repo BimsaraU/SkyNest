@@ -2,7 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
-import { sendBookingConfirmation } from '@/lib/emailService';
+import { sendEmail } from '@/lib/email';
+
+// Utilities to handle date-only values to avoid timezone shifts
+function toDateOnly(value: string): string {
+  if (!value) return value;
+  // Accept either YYYY-MM-DD or ISO; trim to date-only
+  return value.slice(0, 10);
+}
+
+function dateOnlyToUTC(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map((x) => parseInt(x, 10));
+  return Date.UTC(y, (m || 1) - 1, d || 1);
+}
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key-change-in-production');
 
@@ -130,19 +142,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const checkIn = new Date(check_in_date);
-    const checkOut = new Date(check_out_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const checkInStr = toDateOnly(check_in_date);
+    const checkOutStr = toDateOnly(check_out_date);
 
-    if (checkIn < today) {
+    // Validate date ranges using UTC midnight to avoid tz offsets
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const checkInUTC = dateOnlyToUTC(checkInStr);
+    const checkOutUTC = dateOnlyToUTC(checkOutStr);
+    const todayUTC = dateOnlyToUTC(todayStr);
+
+    if (checkInUTC < todayUTC) {
       return NextResponse.json(
         { error: 'Check-in date cannot be in the past' },
         { status: 400 }
       );
     }
 
-    if (checkOut <= checkIn) {
+    if (checkOutUTC <= checkInUTC) {
       return NextResponse.json(
         { error: 'Check-out date must be after check-in date' },
         { status: 400 }
@@ -194,7 +211,7 @@ export async function POST(request: NextRequest) {
             AND status NOT IN ('Cancelled', 'CheckedOut', 'NoShow')
             AND daterange(check_in_date, check_out_date, '[]') && daterange($2::date, $3::date, '[]')
           LIMIT 1`,
-        [room_id, check_in_date, check_out_date]
+        [room_id, checkInStr, checkOutStr]
       );
 
       if (conflictCheck.rows.length > 0) {
@@ -204,7 +221,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+  nights = Math.ceil((checkOutUTC - checkInUTC) / (1000 * 60 * 60 * 24));
       baseAmount = Number(roomRow.base_price) * nights;
 
       const timestamp = Date.now();
@@ -247,7 +264,7 @@ export async function POST(request: NextRequest) {
             services_amount,
             paid_amount,
             outstanding_amount
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ) VALUES ($1, $2, $3, $4::date, $5::date, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING id,
                    booking_reference,
                    guest_id,
@@ -266,8 +283,8 @@ export async function POST(request: NextRequest) {
           bookingReference,
           guestId,
           room_id,
-          check_in_date,
-          check_out_date,
+          checkInStr,
+          checkOutStr,
           number_of_guests || 1,
           bookingStatus,
           totalAmount,
@@ -405,23 +422,24 @@ export async function POST(request: NextRequest) {
     });
 
     if (guestData?.email) {
-      sendBookingConfirmation(
-        guestData.email,
-        {
-          guestName: `${guestData.first_name} ${guestData.last_name}`,
-          bookingReference: bookingRow.booking_reference,
-          roomType: roomRow.room_type,
-          roomNumber: roomRow.room_number,
-          checkIn: check_in_date,
-          checkOut: check_out_date,
-          nights,
-          guests: number_of_guests || 1,
-          totalAmount: `$${Number(bookingRow.total_amount ?? baseAmount).toFixed(2)}`,
-          specialRequests: special_requests || undefined,
-          branchName: roomRow.branch_name,
-          branchAddress: roomRow.branch_address
-        }
-      ).catch((err) => console.error('Email error:', err));
+      const totalTxt = `$${Number(bookingRow.total_amount ?? baseAmount).toFixed(2)}`;
+      const html = `
+        <h2>Booking Confirmed</h2>
+        <p>Hi ${guestData.first_name} ${guestData.last_name},</p>
+        <p>Your booking <strong>${bookingRow.booking_reference}</strong> was created successfully.</p>
+        <ul>
+          <li>Room: ${roomRow.room_type} (${roomRow.room_number})</li>
+          <li>Branch: ${roomRow.branch_name}</li>
+          <li>Check-in: ${checkInStr}</li>
+          <li>Check-out: ${checkOutStr}</li>
+          <li>Nights: ${nights}</li>
+          <li>Guests: ${number_of_guests || 1}</li>
+          <li>Total: ${totalTxt}</li>
+        </ul>
+      `;
+      sendEmail(guestData.email, 'Your Sky Nest booking confirmation', html).catch(err => {
+        console.warn('[EMAIL][BookingConfirmation] failed (soft):', err?.message || err);
+      });
     }
 
     return NextResponse.json({

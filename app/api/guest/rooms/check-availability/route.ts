@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
         r.status as room_status,
         rt.name as room_type,
         rt.base_price,
-        rt.max_occupancy,
+        rt.capacity AS max_occupancy,
         rt.images,
         br.id as branch_id,
         br.name as branch_name,
@@ -216,9 +216,12 @@ export async function GET(request: NextRequest) {
         room.booking_count > 0 ? 'Booked' : 'Available'
     }));
 
-    const nights = Math.ceil(
-      (new Date(check_out_date).getTime() - new Date(check_in_date).getTime()) / (1000 * 60 * 60 * 24)
-    );
+    // Use date-only math to avoid timezone shifts
+    const ci = check_in_date.slice(0,10);
+    const co = check_out_date.slice(0,10);
+    const [y1,m1,d1] = ci.split('-').map(x=>parseInt(x,10));
+    const [y2,m2,d2] = co.split('-').map(x=>parseInt(x,10));
+    const nights = Math.ceil((Date.UTC(y2,(m2||1)-1,d2||1) - Date.UTC(y1,(m1||1)-1,d1||1)) / (1000*60*60*24));
 
     return NextResponse.json({
       check_in_date,

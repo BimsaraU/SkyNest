@@ -50,18 +50,18 @@ export class SkyNestPDFGenerator {
       
       // Calculate centered position for logo
       const logoWidth = 60;
-      const logoHeight = 25;
+      const logoHeight = 20;
       const xPos = (this.pageWidth - logoWidth) / 2;
       
       // Add logo image
       this.doc.addImage(logoPath, 'PNG', xPos, this.currentY, logoWidth, logoHeight);
       
-      this.currentY += logoHeight + 5;
+      this.currentY += logoHeight + 10;
     } catch (error) {
       console.error('Error adding logo:', error);
       // Fallback to text if logo fails to load
       this.doc.setFont('helvetica', 'bold');
-      this.doc.setFontSize(20);
+      this.doc.setFontSize(15);
       this.doc.setTextColor(...this.colors.primary);
       this.doc.text('SKY NEST HOTELS', this.pageWidth / 2, this.currentY, { align: 'center' });
       this.currentY += 10;
@@ -483,7 +483,7 @@ export class SkyNestPDFGenerator {
     
     // Thank you note
     this.doc.setFont('helvetica', 'bold');
-    this.doc.setFontSize(11);
+    this.doc.setFontSize(8);
     this.doc.setTextColor(...this.colors.primary);
     this.doc.text('Thank you for choosing Sky Nest Hotels!', this.pageWidth / 2, this.currentY, { align: 'center' });
     
