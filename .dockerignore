@@ -1,0 +1,41 @@
+# Node & Next.js
+node_modules
+.next
+out
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+npm-cache
+.cache
+
+# VCS
+.git
+.gitignore
+
+# Env & local
+.env
+.env.*
+!.env.production
+!.env.local
+*.local
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.vscode
+.idea
+
+# Tests & coverage
+coverage
+**/__tests__
+**/*.spec.*
+**/*.test.*
+
+# Build artifacts
+*.log
+
+# Images & uploads (kept via public/ at runtime)
+public/uploads

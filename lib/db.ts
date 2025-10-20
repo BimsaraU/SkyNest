@@ -1,45 +1,41 @@
 // This file manages the PostgreSQL connection pool for the Next.js app.
 // It uses TypeScript for type safety.
 
+// Lazy, build-safe pg pool
 import { Pool } from 'pg';
 
-// We'll use a global variable to hold the pool.
-// This is because in a serverless environment, a single function invocation might
-// process multiple requests and we want to reuse the connection pool across them.
-declare global {
-  // eslint-disable-next-line no-var
-  var pool: Pool | undefined;
-}
+let pool: Pool | null = null;
 
-let pool: Pool;    
-
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
-// Check if we're in a production environment
-if (process.env.NODE_ENV === 'production') {
-  // If we're in production, we create a new pool
-  pool = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false, // Required for Neon
-    },
-  });
-} else {
-  // If we're not in production, we use the global variable
-  // to prevent creating multiple connections during hot-reloading in development.
-  if (!global.pool) {
-    global.pool = new Pool({
-      connectionString,
-      ssl: {
-        rejectUnauthorized: false, // Required for Neon
-      },
-    });
+function createPool(): Pool {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    // Throw only at runtime on first use, not during import/build.
+    throw new Error('DATABASE_URL is not set. Provide it via env when running the server/container.');
   }
-  pool = global.pool;
+
+  const useSSL =
+    process.env.PGSSL?.toLowerCase() === 'true' || connectionString.includes('neon.tech');
+
+  return new Pool({
+    connectionString,
+    ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+    max: Number(process.env.PGPOOL_MAX || 10),
+    idleTimeoutMillis: Number(process.env.PGPOOL_IDLE || 30000),
+    connectionTimeoutMillis: Number(process.env.PGPOOL_CONN_TIMEOUT || 10000),
+  });
 }
 
-export default pool;
+function getPool(): Pool {
+  if (!pool) pool = createPool();
+  return pool;
+}
+
+// Default export: expose common methods lazily so imports don’t connect at build
+const lazyPool = {
+  query: (...args: Parameters<Pool['query']>) => getPool().query(...args),
+  connect: (...args: Parameters<Pool['connect']>) => (getPool() as any).connect(...args),
+  end: () => pool?.end(),
+} as unknown as Pool;
+
+export default lazyPool;
+export { getPool };
