@@ -1,0 +1,225 @@
+-- ============================================================================
+-- ESSENTIAL TRIGGERS FOR HOTEL MANAGEMENT V2
+-- ============================================================================
+-- Only critical automated operations for data integrity and automation
+-- Compatible with separated user tables (admins, staff, guests)
+-- Reduced from many triggers to a focused set
+-- ============================================================================
+
+-- ============================================================================
+-- 1. TIMESTAMP UPDATER: Auto-update updated_at on record changes
+-- ============================================================================
+-- Applied to critical tables that need audit trail
+-- Ensures updated_at is always current without application logic
+
+CREATE OR REPLACE FUNCTION update_timestamp() 
+RETURNS TRIGGER AS $$
+BEGIN
+	NEW.updated_at = CURRENT_TIMESTAMP;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply to user tables
+CREATE TRIGGER trigger_update_admins_timestamp 
+	BEFORE UPDATE ON admins 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trigger_update_staff_timestamp 
+	BEFORE UPDATE ON staff 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trigger_update_guests_timestamp 
+	BEFORE UPDATE ON guests 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+-- Apply to core operational tables
+CREATE TRIGGER trigger_update_bookings_timestamp 
+	BEFORE UPDATE ON bookings 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trigger_update_rooms_timestamp 
+	BEFORE UPDATE ON rooms 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trigger_update_maintenance_logs_timestamp 
+	BEFORE UPDATE ON maintenance_logs 
+	FOR EACH ROW 
+	EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================================
+-- 2. BOOKING TOTAL CALCULATOR: Auto-calculate booking amount
+-- ============================================================================
+-- Calculates base_amount and total amounts using room base price and nights
+
+CREATE OR REPLACE FUNCTION calculate_booking_totals() 
+RETURNS TRIGGER AS $$
+DECLARE
+	base_price NUMERIC(10,2);
+	nights INT;
+BEGIN
+	-- Get room's base price from room_types
+	SELECT rt.base_price INTO base_price 
+	FROM room_types rt 
+	JOIN rooms r ON r.room_type_id = rt.id 
+	WHERE r.id = NEW.room_id;
+    
+	-- Calculate number of nights
+	nights := (NEW.check_out_date - NEW.check_in_date);
+    
+	-- Set base and total amounts
+	NEW.base_amount := base_price * nights;
+	NEW.total_amount := COALESCE(NEW.base_amount, 0) + COALESCE(NEW.services_amount, 0);
+	NEW.outstanding_amount := NEW.total_amount - COALESCE(NEW.paid_amount, 0);
+    
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_calculate_booking_totals 
+	BEFORE INSERT OR UPDATE OF room_id, check_in_date, check_out_date, services_amount, paid_amount ON bookings 
+	FOR EACH ROW 
+	EXECUTE FUNCTION calculate_booking_totals();
+
+-- ============================================================================
+-- 3. BOOKING VALIDATOR: Prevent double bookings and invalid dates
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION validate_booking() 
+RETURNS TRIGGER AS $$
+BEGIN
+	-- Validate date range
+	IF NEW.check_in_date >= NEW.check_out_date THEN
+		RAISE EXCEPTION 'Check-out date must be after check-in date';
+	END IF;
+    
+	-- Check for overlapping bookings (using daterange for accuracy)
+	IF EXISTS (
+		SELECT 1 FROM bookings 
+		WHERE room_id = NEW.room_id 
+		AND status NOT IN ('Cancelled', 'CheckedOut', 'NoShow')
+		AND daterange(check_in_date, check_out_date, '[]') && 
+			daterange(NEW.check_in_date, NEW.check_out_date, '[]')
+		AND (TG_OP = 'INSERT' OR id <> NEW.id)
+	) THEN
+		RAISE EXCEPTION 'Room is already booked for the selected dates';
+	END IF;
+    
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_validate_booking 
+	BEFORE INSERT OR UPDATE ON bookings 
+	FOR EACH ROW 
+	EXECUTE FUNCTION validate_booking();
+
+-- ============================================================================
+-- 4. ROOM STATUS SYNCHRONIZER: Keep room status synced with bookings
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION sync_room_status() 
+RETURNS TRIGGER AS $$
+BEGIN
+	IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+		-- Guest checked in: mark room as occupied
+		IF NEW.status = 'CheckedIn' THEN
+			UPDATE rooms SET status = 'Occupied' WHERE id = NEW.room_id;
+        
+		-- Guest checked out: mark room as needs cleaning
+		ELSIF NEW.status = 'CheckedOut' THEN
+			UPDATE rooms SET status = 'Cleaning' WHERE id = NEW.room_id;
+        
+		-- Booking cancelled or no-show: mark available if no other active bookings
+		ELSIF NEW.status IN ('Cancelled', 'NoShow') THEN
+			IF NOT EXISTS (
+				SELECT 1 FROM bookings 
+				WHERE room_id = NEW.room_id 
+				AND id <> NEW.id 
+				AND status IN ('Confirmed', 'CheckedIn')
+			) THEN
+				UPDATE rooms SET status = 'Available' WHERE id = NEW.room_id;
+			END IF;
+		END IF;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_sync_room_status 
+	AFTER INSERT OR UPDATE OF status ON bookings 
+	FOR EACH ROW 
+	EXECUTE FUNCTION sync_room_status();
+
+-- ============================================================================
+-- 5. OTP CLEANUP: Remove expired OTP records automatically
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION clean_expired_otps() 
+RETURNS TRIGGER AS $$
+BEGIN
+	DELETE FROM otps WHERE expires_at < CURRENT_TIMESTAMP;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_clean_expired_otps 
+	BEFORE INSERT ON otps 
+	FOR EACH STATEMENT 
+	EXECUTE FUNCTION clean_expired_otps();
+
+-- ============================================================================
+-- 6. FLEXIBLE PAYMENT SYSTEM: Maintain booking financials
+-- ============================================================================
+
+-- Update booking paid_amount when payments are made
+CREATE OR REPLACE FUNCTION update_booking_paid_amount()
+RETURNS TRIGGER AS $$
+BEGIN
+	UPDATE bookings
+	SET paid_amount = (
+		SELECT COALESCE(SUM(amount), 0)
+		FROM payments
+		WHERE booking_id = NEW.booking_id
+		AND payment_status = 'Completed'
+	)
+	WHERE id = NEW.booking_id;
+    
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_booking_payment
+	AFTER INSERT OR UPDATE ON payments
+	FOR EACH ROW
+	EXECUTE FUNCTION update_booking_paid_amount();
+
+-- Update services_amount when service_usage changes
+CREATE OR REPLACE FUNCTION update_booking_services_amount()
+RETURNS TRIGGER AS $$
+BEGIN
+	UPDATE bookings
+	SET services_amount = (
+		SELECT COALESCE(SUM(price_at_time * quantity), 0)
+		FROM service_usage
+		WHERE booking_id = COALESCE(NEW.booking_id, OLD.booking_id)
+	)
+	WHERE id = COALESCE(NEW.booking_id, OLD.booking_id);
+    
+	RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_booking_services
+	AFTER INSERT OR UPDATE OR DELETE ON service_usage
+	FOR EACH ROW
+	EXECUTE FUNCTION update_booking_services_amount();
+
+-- ============================================================================
+-- END OF TRIGGERS
+-- ============================================================================

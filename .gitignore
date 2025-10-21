@@ -55,6 +55,7 @@ next-env.d.ts
 /Database/*.md
 !/Database/Main_Database/
 /Database/V2_Separated_Tables
+/Database/migration
 
 # Uploaded profile pictures
 
@@ -62,3 +63,7 @@ next-env.d.ts
 ***.md
     
 /app/temp
+
+# Ignore legacy Database folder; new SQL lives in /Main_Dtabase
+/Database/
+!/Database/README.md
